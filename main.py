@@ -92,48 +92,46 @@ def get_opensea_key():
     return ""
 
 
-def fetch_opensea_activity(cutoff):
+def fetch_opensea_new_collections(cutoff):
     items = []
     key = get_opensea_key()
     if not key:
         return items
     try:
         r = requests.get(
-            "https://api.opensea.io/api/v2/events",
+            "https://api.opensea.io/api/v2/collections",
             headers={"x-api-key": key, **HEADERS},
-            params={"event_type": "listing", "limit": 30},
+            params={"order_by": "created_date", "limit": 30},
             timeout=15,
         )
         if not r.ok:
-            print(f"OpenSea events fetch failed: HTTP {r.status_code} - {r.text[:150]}")
+            print(f"OpenSea collections fetch failed: HTTP {r.status_code} - {r.text[:150]}")
             return items
         data = r.json()
-        for ev in data.get("asset_events", data.get("events", []))[:30]:
-            ts = ev.get("event_timestamp") or ev.get("closing_date")
+        entries = data.get("collections", [])
+        print(f"OpenSea raw collections returned: {len(entries)}")
+        now = datetime.now(timezone.utc)
+        for c in entries[:30]:
+            slug = c.get("collection", c.get("slug", ""))
+            name = c.get("name", slug)
+            created = c.get("created_date", "")
             try:
-                pub_dt = datetime.fromtimestamp(int(ts), tz=timezone.utc) if isinstance(ts, (int, float)) else \
-                          datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                pub_dt = datetime.fromisoformat(str(created).replace("Z", "+00:00")) if created else now
             except Exception:
-                pub_dt = datetime.now(timezone.utc)
-            if pub_dt < cutoff:
-                continue
-            nft = ev.get("nft") or ev.get("asset") or {}
-            collection = nft.get("collection", "") if isinstance(nft, dict) else ""
-            name = nft.get("name", "") if isinstance(nft, dict) else ""
-            payment = ev.get("payment", {}) or {}
-            price = payment.get("quantity", "")
-            symbol = payment.get("symbol", "")
-            opensea_url = nft.get("opensea_url", "") if isinstance(nft, dict) else ""
+                pub_dt = now
+            # no strict cutoff filter here -- rely on seen-id dedup, since not every
+            # response reliably includes created_date and we don't want to silently drop items
+            description = (c.get("description") or "")[:150]
             items.append({
                 "source": "OpenSea",
-                "id": make_id("os", collection, name, ts),
-                "title": f"New listing: {name or collection or 'NFT'} ({collection})",
-                "link": opensea_url or f"https://opensea.io/collection/{collection}",
-                "detail": f"Price: {price} {symbol}" if price else "",
+                "id": make_id("os-collection", slug),
+                "title": f"New collection: {name}",
+                "link": f"https://opensea.io/collection/{slug}" if slug else "https://opensea.io",
+                "detail": description,
                 "published": pub_dt,
             })
     except Exception as e:
-        print(f"OpenSea events fetch failed: {e}")
+        print(f"OpenSea collections fetch failed: {e}")
     return items
 
 
@@ -273,7 +271,7 @@ def main():
     seen = load_seen()
     all_items = []
 
-    os_items = fetch_opensea_activity(cutoff)
+    os_items = fetch_opensea_new_collections(cutoff)
     print(f"OpenSea: fetched {len(os_items)} items")
     all_items.extend(os_items)
 
