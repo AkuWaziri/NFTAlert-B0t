@@ -28,7 +28,7 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 NEYNAR_API_KEY = os.environ.get("NEYNAR_API_KEY", "")
 
-RECENCY_HOURS = 12
+RECENCY_HOURS = 48
 SEEN_FILE = "seen_nft.json"
 MAX_ALERTS_PER_RUN = 20
 
@@ -76,7 +76,12 @@ def send_telegram(text):
 
 
 # ---------- OPENSEA (instant free key, no signup) ----------
+OPENSEA_API_KEY = os.environ.get("OPENSEA_API_KEY", "")
+
+
 def get_opensea_key():
+    if OPENSEA_API_KEY:
+        return OPENSEA_API_KEY
     try:
         r = requests.post("https://api.opensea.io/api/v2/auth/keys", headers=HEADERS, timeout=15)
         if r.ok:
@@ -165,6 +170,7 @@ def fetch_rss(name, url, cutoff):
 def fetch_farcaster_nft(cutoff):
     items = []
     if not NEYNAR_API_KEY:
+        print("Farcaster: NEYNAR_API_KEY not set, skipping this source")
         return items
     seen_hashes = set()
     for query in FARCASTER_NFT_QUERIES:
@@ -221,6 +227,7 @@ def fetch_magic_eden_launches(cutoff):
             return items
         data = r.json()
         entries = data if isinstance(data, list) else data.get("collections", [])
+        print(f"Magic Eden raw entries returned: {len(entries)}")
         now = datetime.now(timezone.utc)
         for c in entries[:20]:
             symbol = c.get("symbol", "")
