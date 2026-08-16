@@ -1,2 +1,2 @@
 requests==2.32.3
-websockets==13.1
+feedparser==6.0.11
