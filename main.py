@@ -237,8 +237,8 @@ def fetch_magic_eden_launches(cutoff):
                 pub_dt = datetime.fromisoformat(str(launch_ts).replace("Z", "+00:00")) if launch_ts else now
             except Exception:
                 pub_dt = now
-            if pub_dt < cutoff:
-                continue
+            # no recency filter here -- launchpad list isn't strictly time-ordered,
+            # so we rely on the seen-id dedup to only alert on genuinely new-to-us entries
             price = c.get("price", "")
             items.append({
                 "source": "Magic Eden (Solana)",
