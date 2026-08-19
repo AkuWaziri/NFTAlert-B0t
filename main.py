@@ -110,6 +110,7 @@ def fetch_opensea_new_collections(cutoff):
         data = r.json()
         entries = data.get("collections", [])
         print(f"OpenSea raw collections returned: {len(entries)}")
+        print(f"OpenSea first 5 names/dates: {[(c.get('name'), c.get('created_date')) for c in entries[:5]]}")
         now = datetime.now(timezone.utc)
         for c in entries[:30]:
             slug = c.get("collection", c.get("slug", ""))
@@ -226,6 +227,7 @@ def fetch_magic_eden_launches(cutoff):
         data = r.json()
         entries = data if isinstance(data, list) else data.get("collections", [])
         print(f"Magic Eden raw entries returned: {len(entries)}")
+        print(f"Magic Eden first 5 names/dates: {[(c.get('name'), c.get('launchDatetime')) for c in entries[:5]]}")
         now = datetime.now(timezone.utc)
         for c in entries[:20]:
             symbol = c.get("symbol", "")
