@@ -27,6 +27,8 @@ HEADERS = {
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 NEYNAR_API_KEY = os.environ.get("NEYNAR_API_KEY", "")
+HELIUS_API_KEY = os.environ.get("HELIUS_API_KEY", "")
+TOKEN_METADATA_PROGRAM = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
 
 RECENCY_HOURS = 48
 SEEN_FILE = "seen_nft.json"
@@ -253,6 +255,55 @@ def fetch_magic_eden_launches(cutoff):
     return items
 
 
+def fetch_helius_new_mints(cutoff):
+    """Polls Helius's enhanced transaction API for the Token Metadata Program --
+    this catches new NFT mints happening live across all of Solana, not a curated list."""
+    items = []
+    if not HELIUS_API_KEY:
+        print("Helius: HELIUS_API_KEY not set, skipping this source")
+        return items
+    try:
+        r = requests.get(
+            f"https://api.helius.xyz/v0/addresses/{TOKEN_METADATA_PROGRAM}/transactions",
+            params={"api-key": HELIUS_API_KEY, "limit": 30},
+            headers=HEADERS, timeout=20,
+        )
+        if not r.ok:
+            print(f"Helius fetch failed: HTTP {r.status_code} - {r.text[:150]}")
+            return items
+        data = r.json()
+        print(f"Helius raw transactions returned: {len(data)}")
+        seen_types = set()
+        for tx in data:
+            tx_type = tx.get("type", "")
+            seen_types.add(tx_type)
+            if "MINT" not in tx_type:
+                continue
+            ts = tx.get("timestamp")
+            try:
+                pub_dt = datetime.fromtimestamp(int(ts), tz=timezone.utc) if ts else datetime.now(timezone.utc)
+            except Exception:
+                pub_dt = datetime.now(timezone.utc)
+            if pub_dt < cutoff:
+                continue
+            sig = tx.get("signature", "")
+            events = tx.get("events", {})
+            nft_event = events.get("nft", {}) if isinstance(events, dict) else {}
+            description = tx.get("description", "") or f"{tx_type} event"
+            items.append({
+                "source": "Helius (Solana mints)",
+                "id": make_id("helius", sig),
+                "title": f"New Solana mint: {description[:150]}",
+                "link": f"https://solscan.io/tx/{sig}",
+                "detail": f"Type: {tx_type}",
+                "published": pub_dt,
+            })
+        print(f"Helius transaction types seen this run: {seen_types}")
+    except Exception as e:
+        print(f"Helius fetch failed: {e}")
+    return items
+
+
 # ---------- FORMATTING ----------
 def format_alert(item):
     lines = [
@@ -286,9 +337,9 @@ def main():
     print(f"Farcaster: fetched {len(fc_items)} items")
     all_items.extend(fc_items)
 
-    me_items = fetch_magic_eden_launches(cutoff)
-    print(f"Magic Eden: fetched {len(me_items)} items")
-    all_items.extend(me_items)
+    helius_items = fetch_helius_new_mints(cutoff)
+    print(f"Helius: fetched {len(helius_items)} items")
+    all_items.extend(helius_items)
 
     print(f"Total items fetched: {len(all_items)}")
 
